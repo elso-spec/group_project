@@ -1,0 +1,73 @@
+---
+title: "Plots"
+author: "Elisabeth Solmunde"
+format: html
+editor: visual
+---
+
+# Exploring trends in life expectancies in different regions of the world 
+
+
+## Life expectancies per region 
+```{r}
+life_expectancy_region |> 
+  group_by(Continent, Decade) |> 
+  summarise(mean_life_expectancy = mean(LifeExpectancy)) |> 
+  ggplot(aes(x = Decade, y = mean_life_expectancy, color = Continent), na.rm = T) +
+  geom_point() + 
+  geom_smooth(se = F) + 
+  scale_x_continuous(breaks = seq(1950, 2010, by = 10)) +
+  theme_classic() +
+  labs(
+    x = "Year",
+    y = "Mean life expectancy (years)",
+    title = "Mean life expectancies from 1950 to 2010, by continent"
+  )
+```
+
+## Life expectancies in high vs. low income countries 
+```{r}
+income_groups |> 
+  group_by(Entity, Decade) |> 
+  summarise(mean_life_expectancy = mean(LifeExpectancy)) |> 
+  ggplot(aes(x = Decade, y = mean_life_expectancy, color = Entity), na.rm = T) +
+  geom_point() +
+  geom_smooth() +
+  scale_x_continuous(breaks = seq(1950, 2010, by = 10)) +
+  theme_classic() +
+  labs(
+    x = "Year",
+    y = "Mean life expectancy (years)",
+    title = "Mean life expectancies from 1950 to 2010, by income group",
+    color = "Income groups"
+  )
+```
+```{r}
+life_expectancy |> 
+  group_by(Entity, Decade) |> 
+  summarise()
+```
+
+```{r}
+life_expectancy_female_male_regions |> 
+  group_by(Continent, Decade) |> 
+  summarise(mean_difference = mean(LifeExpectancyDiffFM)) |> 
+  ggplot(aes(x = Decade, y = mean_difference, color = Continent), na.rm = T) +
+  geom_point() +
+  geom_smooth(se = F) +
+  scale_x_continuous(breaks = seq(1950, 2010, by = 10)) +
+  theme_classic() +
+  labs(
+    x = "Year",
+    y = "Mean difference in life expectancy (years)",
+    title = "Mean difference in life expectancies from 1950 to 2010"
+  )
+```
+```{r}
+life_expectancy_region |> 
+  ggplot(aes(x = Year, y = LifeExpectancy, color = Entity)) +
+  geom_point() +
+  facet_wrap(~ Region)
+```
+
+

@@ -1,0 +1,91 @@
+---
+title: "Wrangling"
+author: "Elisabeth Solmunde"
+format: html
+editor: visual
+---
+
+# Data Wrangling
+
+## Description of the datasets
+
+*life_expectancy* contains
+
+-   Entity
+-   Entity Code
+-   Year
+-   Life Expectancy
+
+Follow up is limited until 2020:
+
+```{r, eval = FALSE}
+# Criteria 1: Stop follow up after 2020 
+life_expectancy <- life_expectancy |> 
+  dplyr::filter(Year < 2020)
+life_expectancy_different_ages <- life_expectancy_different_ages |> 
+  dplyr::filter(Year < 2020)
+life_expectancy_female_male <- life_expectancy_female_male |> 
+  dplyr::filter(Year < 2020)
+```
+
+Furthermore, we add a column called Decade:
+
+```{r, eval = FALSE}
+# Stop follow-up after 2020 
+# Create Decade column
+# Remove NAs
+life_expectancy <- life_expectancy |> 
+  dplyr::mutate(Decade = case_when(Year >= 1950 & Year < 1960 ~ 1950,
+                            Year >= 1960 & Year < 1970 ~ 1960,
+                            Year >= 1970 & Year < 1980 ~ 1970,
+                            Year >= 1980 & Year < 1990 ~ 1980,
+                            Year >= 1990 & Year < 2000 ~ 1990, 
+                            Year >= 2000 & Year < 2010 ~ 2000,
+                            Year >= 2010 & Year < 2020 ~ 2010)) |> 
+  dplyr::filter(!is.na(Decade))
+```
+
+*life_expectancy_different_ages* contains
+
+*life_expectancy_female_male* contains
+
+- Entity
+- Code
+- Year
+- Difference in life expectancy (female - male)
+
+## Creating life_expectancy_region
+
+This dataset is an extension of life_expectancy where we add Continent and Region using the package *countrycode*
+
+```{r, eval = FALSE}
+library(countrycode)
+
+# Add region and continent, remove countries with no assigned region 
+life_expectancy_region <- life_expectancy |>
+  filter(!Entity %in% c("Africa", "Asia", "Europe", "Northern America", "Americas", "Oceania")) |> 
+  dplyr::mutate(
+    Continent = countrycode::countrycode(sourcevar = Entity,
+                            origin = "country.name", 
+                            destination = "continent"),
+    Region = countrycode::countrycode(sourcevar = Entity, 
+                         origin = "country.name", 
+                         destination = "region")
+  ) |> 
+  dplyr::filter(!is.na(Region))
+```
+
+## Creating income_group
+
+This dataset contain life expectancies for the different countries divided into low income, medium income and high income countries
+
+```{r, eval = FALSE}
+library(stringr)
+
+ # income groups data
+income_groups <- life_expectancy |>
+  dplyr::filter(stringr::str_detect(Entity, regex("income", ignore_case = TRUE))) |>
+  dplyr::select(-Code)
+```
+
+
