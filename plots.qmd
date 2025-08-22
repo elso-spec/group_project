@@ -69,5 +69,50 @@ life_expectancy_region |>
   geom_point() +
   facet_wrap(~ Region)
 ```
+```{r}
+# Life expectancy by country (1960-2020)
+ggplot(life_expectancy_change, aes(x = Year, y = Entity, fill = LifeExpectancy)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "plasma", name = "Life Expectancy") +
+  labs(title = "Life Expectancy by Country (1960–2020)",
+       x = "Year", y = "Country") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 6))
+
+```
+
+
+
+```{r}
+# Changes in life expectancies
+life_expectancy_change <- life_expectancy_change %>%
+  group_by(Entity) %>%
+  arrange(Year) %>%
+  mutate(delta = LifeExpectancy - lag(LifeExpectancy)) %>%
+  ungroup()
+
+ggplot(life_expectancy_change, aes(x = Year, y = Entity, fill = delta)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "red", mid = "white", high = "blue",
+                       midpoint = 0, name = "Δ Life Expectancy") +
+  labs(title = "Year-to-Year Change in Life Expectancy (1960–2020)",
+       x = "Year", y = "Country") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 6))
+```
+```{r}
+# Life expectancy by region (1960-2020)
+life_expectancy_region |> 
+  filter(Year >= 1950 & Year <= 2020) |> 
+  group_by(Region, Year) |> 
+  summarise(mean_le = mean(LifeExpectancy)) |> 
+  ggplot(aes(x = Year, y = Region, fill = mean_le)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "plasma", name = "Life Expectancy") +
+  labs(title = "Life Expectancy by Region (1960–2020)",
+       x = "Year", y = "Region") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 6))
+```
 
 
