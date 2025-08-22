@@ -120,11 +120,12 @@ life_expectancy_region <- life_expectancy |>
 life_expectancy_region
 ```
 
-## 3. Visualization 
+## 3. Visualization
 
 **First, lets take a look at the changes in life expectancy over time:**
 
 We'll start by looking at the continents, and then regions
+
 ```{r, message = FALSE, warning = FALSE}
 life_expectancy_region |> 
   filter(!is.na(Continent)) |> 
@@ -141,6 +142,7 @@ life_expectancy_region |>
     title = "Mean life expectancies from 1950 to 2020, by continent"
   )
 ```
+
 ```{r, message=FALSE, warning=FALSE}
 life_expectancy_region |> 
   filter(!is.na(Region)) |> 
@@ -157,6 +159,7 @@ life_expectancy_region |>
     title = "Mean life expectancies from 1950 to 2020, by region"
   )
 ```
+
 ```{r, message=FALSE, warning=FALSE}
 # Life expectancy by region (1950-2020)
 life_expectancy_region |> 
@@ -184,4 +187,169 @@ ggplot(life_expectancy_region, aes(x = Year, y = Entity, fill = LifeExpectancy))
   
 ```
 
+**Then, lets see the information per country**
 
+First, generate a world heatmap with the average Life Expectancy per country per decade, starting from 1920
+
+```{r}
+##Add the continents to the data
+le_continent <- life_expectancy %>%
+  mutate(continent = countrycode(Entity, origin = "country.name", destination = "continent"))
+
+
+##Split in decades
+le_continent <- le_continent %>%
+  mutate(decade = floor(Year / 10) * 10)
+
+by_decade <- split(le_continent, le_continent$decade)
+
+names(by_decade)
+
+# Make a working data frame
+df <- le_continent_subset %>% as_tibble()
+
+# Country-by-decade average (from 1920s onward)
+df_country_dec <- df %>%
+  mutate(
+    decade = (Year %/% 10) * 10,
+    Code   = trimws(Code)
+  ) %>%
+  # keep real countries (valid ISO3 codes) and decades >= 1920
+  filter(!is.na(Code), Code != "", nchar(Code) == 3, grepl("^[A-Za-z]{3}$", Code),
+         decade >= 1920) %>%
+  group_by(Code, Entity, decade) %>%
+  summarise(avg_lifeexp = mean(LifeExpectancy, na.rm = TRUE), .groups = "drop")
+
+# Consistent colors across decades
+zmin <- floor(min(df_country_dec$avg_lifeexp, na.rm = TRUE))
+zmax <- ceiling(max(df_country_dec$avg_lifeexp, na.rm = TRUE))
+
+# ANIMATED MAP (all decades from 1920s)
+# =======================
+p_anim <- plot_ly(
+  df_country_dec,
+  type         = "choropleth",
+  locations    = ~Code, locationmode = "ISO-3",
+  z            = ~avg_lifeexp,
+  frame        = ~decade,
+  text         = ~paste0(
+    "<b>", Entity, "</b><br>",
+    "Decade: ", decade, "<br>",
+    "Life expectancy: ", round(avg_lifeexp, 1)
+  ),
+  hoverinfo    = "text",
+  colorscale   = "Viridis",
+  zmin         = zmin, zmax = zmax
+) %>%
+  layout(
+    title = "Average life expectancy by country — animated by decade (from 1920s)",
+    geo = list(
+      showframe = FALSE,
+      showcoastlines = FALSE,
+      showcountries = TRUE,
+      projection = list(type = "natural earth")
+    )
+  )
+
+# Save animated map into a HTML file
+saveWidget(p_anim, "worldheatmap.html", selfcontained = TRUE)
+
+
+```
+
+The world heatmap represents the global tendencies, continent differences remain similar decade after decade.
+
+Now, lets see the information of the differences between females and males per country per decade.
+
+```{r}
+##Load the data and make your working dataframe
+df <- life_expectancy_female_male %>% as_tibble()
+
+# Gap (Females − Males)
+if ("LifeExpectancyDiffFM" %in% names(df)) {
+  df <- df %>% mutate(Gap = LifeExpectancyDiffFM)
+} else if (all(c("LE_Female", "LE_Male") %in% names(df))) {
+  df <- df %>% mutate(Gap = LE_Female - LE_Male)
+} else {
+  stop("cant find 'LifeExpectancyDiffFM' or 'LE_Female/LE_Male' in the df.")
+}
+
+# Clean codes and add decades
+df <- df %>%
+  mutate(
+    Code   = trimws(Code),
+    decade = (Year %/% 10) * 10
+  ) %>%
+  filter(
+    !is.na(Code), Code != "",
+    nchar(Code) == 3, grepl("^[A-Za-z]{3}$", Code),
+    decade >= 1950
+  )
+
+# Mean per country per decade, exclude NA
+df_dec <- df %>%
+  group_by(Entity, Code, decade) %>%
+  summarise(Gap = mean(Gap, na.rm = TRUE), .groups = "drop") %>%
+  filter(!is.na(Gap)) %>%
+  mutate(
+    Sign = ifelse(Gap >= 0, "Females > Males", "Males > Females"),
+    decade_str = as.character(decade) # frames as texto
+  )
+
+pal2 <- c("#ef476f", "#06d6a0")
+
+# Simetric
+lim <- max(abs(range(df_dec$Gap, na.rm = TRUE)))
+xrange <- c(-lim, lim)
+
+# Buttons per decade
+decades <- sort(unique(df_dec$decade_str))
+btns <- lapply(decades, function(d) {
+  list(
+    label = paste0(d, "s"),
+    method = "animate",
+    args = list(
+      list(d),
+      list(mode = "immediate",
+           frame = list(duration = 0, redraw = TRUE),
+           transition = list(duration = 0))
+    )
+  )
+})
+
+p_btns <- plot_ly(
+  df_dec,
+  x = ~Gap, y = ~Entity,
+  frame = ~decade_str,
+  type = "bar", orientation = "h",
+  color = ~Sign, colors = pal2,
+  hovertemplate = paste(
+    "<b>%{y}</b><br>",
+    "Decade: %{frame}<br>",
+    "Gap (Females − Males): %{x:.2f} years<extra></extra>"
+  )
+) %>%
+  layout(
+    title = "Life Expectancy gap per Country — Decades (since 1950)",
+    xaxis = list(title = "Years (positive = Females > Males)"),
+    yaxis = list(title = ""),
+    barmode = "relative",
+    height = 800,
+    updatemenus = list(
+      list(
+        type = "buttons",
+        direction = "right",
+        x = 1, xanchor = "right",
+        y = 1.12, yanchor = "top",
+        buttons = btns          # just decades
+      )
+    )
+  ) %>%
+  animation_slider(hide = TRUE) %>%   # hide slider
+  animation_button(hide = TRUE)       # hide Play 
+
+# Save as interactive HTML
+saveWidget(p_btns, "gap_bar_dec.html", selfcontained = TRUE)
+```
+
+The differential plot shows the gender gap and how it remains as females having a bigger life expectancy than males but we can observe some cases in the earlier decades where the males have bigger life expectancy for a few countries.
