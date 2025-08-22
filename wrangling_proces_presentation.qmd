@@ -120,11 +120,12 @@ life_expectancy_region <- life_expectancy |>
 life_expectancy_region
 ```
 
-## 3. Visualization 
+## 3. Visualization
 
 **First, lets take a look at the changes in life expectancy over time:**
 
 We'll start by looking at the continents, and then regions
+
 ```{r, message = FALSE, warning = FALSE}
 life_expectancy_region |> 
   filter(!is.na(Continent)) |> 
@@ -141,6 +142,7 @@ life_expectancy_region |>
     title = "Mean life expectancies from 1950 to 2020, by continent"
   )
 ```
+
 ```{r, message=FALSE, warning=FALSE}
 life_expectancy_region |> 
   filter(!is.na(Region)) |> 
@@ -157,6 +159,7 @@ life_expectancy_region |>
     title = "Mean life expectancies from 1950 to 2020, by region"
   )
 ```
+
 ```{r, message=FALSE, warning=FALSE}
 # Life expectancy by region (1950-2020)
 life_expectancy_region |> 
@@ -183,5 +186,200 @@ ggplot(life_expectancy_region, aes(x = Year, y = Entity, fill = LifeExpectancy))
   theme(axis.text.y = element_text(size = 6)) 
   
 ```
+
+###The distribution of life expectancies within regions with comparison of the 1960s and the 2010s. 
+
+## calculate average for the decade 1960 og 2010
+First I calculate the average over decade by country
+```{r}
+life_expectancy_avg <- life_expectancy_region %>%
+  filter(Decade %in% c(1960, 2010)) %>%
+  group_by(Entity, Region, Decade) %>%
+  summarise(LifeExpectancy = mean(LifeExpectancy), .groups = "drop")
+
+```
+Then i make a violin plot
+```{r}
+# Plot half violins
+ggplot(life_expectancy_avg, aes(x = Region, y = LifeExpectancy, fill = factor(Decade))) +
+  # Half violins
+  geom_half_violin(data = subset(life_expectancy_avg, Decade == 1960), side = "l", alpha = 0.6) +
+  geom_half_violin(data = subset(life_expectancy_avg, Decade == 2010), side = "r", alpha = 0.6) +
+  
+  # Punkter for hvert land
+  #geom_point(aes(group = Entity), position = position_jitter(width = 0.1), size = 2, alpha = 0.7, color = "black") +
+  #points could be added, but also overflows the visuals of the plot
+  # Farver
+  scale_fill_viridis_d(name = "Decade") + #inserting colorscheme
+  
+  # Tema og labels
+  theme_minimal(base_size = 14) +
+  labs(
+    title = "Life Expectancy per Region: 1960 vs 2010", #lab titles
+    x = "Region",
+    y = "Life Expectancy"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) #axis text placement and angle
+```
+
+###The distribution over the world across decades
+Firstly we join the data with population data and create a new data set
+```{r}
+dplyr::glimpse(countrypops)
+
+# 1. Join life expectancy with countrypops
+life_expectancy_pop <- life_expectancy_region %>%
+  left_join(
+    countrypops %>%
+      rename(Code = country_code_3, Year = year, Population = population),
+    by = c("Code", "Year")
+  )
+str(life_expectancy_pop)
+```
+Then I check for NAs
+```{r}
+na_list <- life_expectancy_pop %>%
+  filter(is.na(Population)) %>%
+  distinct(Code, Entity) %>%
+  arrange(Code)
+
+na_list
+sum(is.na(life_expectancy_pop$Population))
+```
+Then I check the range of the Year column
+```{r}
+range(life_expectancy_region$Year)
+range(countrypops$year)
+```
+I then filter the columns to match and check for NAs again
+```{r}
+life_expectancy_pop <- life_expectancy_region %>%
+  filter(Year >= 1962) %>%
+  left_join(
+    countrypops %>%
+      rename(Code = country_code_3, Year = year, Population = population),
+    by = c("Code", "Year")
+  )
+
+sum(is.na(life_expectancy_pop$Population))
+
+# Find alle Codes hvor Population er NA
+na_list1 <- life_expectancy_pop %>%
+  filter(is.na(Population)) %>%
+  distinct(Code, Entity) %>%
+  arrange(Code)
+
+na_list1
+```
+I then remove the NAs
+```{r}
+life_expectancy_pop <- life_expectancy_pop %>%
+  filter(!is.na(Population)) 
+
+sum(is.na(life_expectancy_pop$Population))
+```
+Then I insert a new column with decade as a factor, since ggridges works with this.
+```{r}
+life_expectancy_pop <- life_expectancy_pop %>%
+  mutate(DecadeF = factor(Decade))             # Decade as factor
+```
+I now make a ridgeplot
+```{r}
+# 5. Start med grundplot: ridge plot
+p <- ggplot(life_expectancy_pop, aes(
+  x = LifeExpectancy,
+  y = DecadeF,
+  fill = DecadeF
+)) +
+  ggridges::geom_density_ridges(scale = 2, alpha = 0.6, color = "white") +
+  scale_fill_viridis_d(option = "D") +
+  scale_x_continuous(name = "Life Expectancy") +
+  scale_y_discrete(name = "Decade", limits = rev) +   # <--- vend rækkefølgen
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "right") +
+  labs(title = "Life Expectancy by Decade")
+p
+```
+
+Now i decide to add a point with geom_point for the average by decade
+```{r}
+# Calculate non-weighted mean per decade
+mean_per_decade <- life_expectancy_pop %>%
+  group_by(DecadeF) %>%
+  summarise(mean_LE = mean(LifeExpectancy))
+            
+p1<- p + geom_point(
+  data = mean_per_decade,
+  aes(x = mean_LE, y = DecadeF,color="Unweighted mean"))
+p1
+            
+```
+And a median
+```{r}
+# Calculate median per decade
+median_per_decade <- life_expectancy_pop %>%
+  group_by(DecadeF) %>%
+  summarise(median_LE = median(LifeExpectancy, na.rm = TRUE))
+
+p2<-p1+geom_line(
+    data = median_per_decade,
+    aes(x = median_LE, y = DecadeF, group = 1, color="Unweighted median"),
+    size = 1,
+    linetype = "dashed"
+  )
+p2
+```
+And the same where it is weighted by population
+```{r}
+weighted_means <- life_expectancy_pop %>%
+  group_by(DecadeF) %>%
+  summarise(
+    wmean = sum(LifeExpectancy * Population) / sum(Population)
+  )
+
+library(matrixStats)
+
+weighted_medians <- life_expectancy_pop %>%
+  group_by(DecadeF) %>%
+  summarise(
+    median_w = matrixStats::weightedMedian(LifeExpectancy, Population, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+weighted_medians
+ p3 <- p2 +
+  geom_point(
+    data = weighted_means,
+    aes(x = wmean, y = DecadeF, color="Weighted mean")) 
+p3
+
+p4 <- p3 +
+  geom_line(
+    data = weighted_medians,
+    aes(x = median_w, y=DecadeF, group=1,color="Weighted median"),
+    linetype = "dashed",
+    size = 1) 
+
+
+p4
+```
+And we add a legend
+```{r}
+p5<-p4+
+  scale_color_manual(
+    name = "Statistics",
+    values = c(
+      "Unweighted mean" = "blue",
+      "Unweighted median" = "blue",
+      "Weighted mean"   = "red",
+      "Weighted median" = "red"),
+    guide = guide_legend(override.aes = list(shape = 16, size = 3)))
+p5
+
+```
+
+
+
+
 
 
