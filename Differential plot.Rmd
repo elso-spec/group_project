@@ -1,0 +1,115 @@
+---
+title: "Gender diff"
+author: "GZ"
+date: "2025-08-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+```{r}
+
+##Load the data
+df <- life_expectancy_female_male %>% as_tibble()
+
+# Gap (Females − Males)
+if ("LifeExpectancyDiffFM" %in% names(df)) {
+  df <- df %>% mutate(Gap = LifeExpectancyDiffFM)
+} else if (all(c("LE_Female", "LE_Male") %in% names(df))) {
+  df <- df %>% mutate(Gap = LE_Female - LE_Male)
+} else {
+  stop("cant find 'LifeExpectancyDiffFM' or 'LE_Female/LE_Male' in the df.")
+}
+
+# 2) clean codes and add decades
+df <- df %>%
+  mutate(
+    Code   = trimws(Code),
+    decade = (Year %/% 10) * 10
+  ) %>%
+  filter(
+    !is.na(Code), Code != "",
+    nchar(Code) == 3, grepl("^[A-Za-z]{3}$", Code),
+    decade >= 1950
+  )
+
+# 3) Mean per country per decade, exclude NA
+df_dec <- df %>%
+  group_by(Entity, Code, decade) %>%
+  summarise(Gap = mean(Gap, na.rm = TRUE), .groups = "drop") %>%
+  filter(!is.na(Gap)) %>%
+  mutate(
+    Sign = ifelse(Gap >= 0, "Females > Males", "Males > Females"),
+    decade_str = as.character(decade) # frames as texto
+  )
+
+
+
+# 4) Simetric
+lim <- max(abs(range(df_dec$Gap, na.rm = TRUE)))
+xrange <- c(-lim, lim)
+
+# 5) Buttons per decade
+decades <- sort(unique(df_dec$decade_str))
+btns <- lapply(decades, function(d) {
+  list(
+    label = paste0(d, "s"),
+    method = "animate",
+    args = list(
+      list(d), # frame name
+      list(mode = "immediate",
+           frame = list(duration = 0, redraw = TRUE),
+           transition = list(duration = 0))
+    )
+  )
+})
+
+
+
+# 6) Plot
+p_btns <- plot_ly(
+  df_dec,
+  x = ~Gap,
+  y = ~Entity,
+  frame = ~decade_str,          
+  type = "bar",
+  orientation = "h",
+  color = ~Sign,
+  hovertemplate = paste(
+    "<b>%{y}</b><br>",
+    "Decade: %{frame}<br>",
+    "Gap (Females − Males): %{x:.2f} years<extra></extra>"
+  )
+) %>%
+  layout(
+    title = "Life Expectancy per Country — Decades (since 1950)",
+    xaxis = list(title = "Years (positive = Females > Males)", zeroline = TRUE, range = xrange),
+    yaxis = list(title = ""),
+    barmode = "relative",
+    height = 800,
+    legend = list(title = list(text = "Category")),
+    updatemenus = list(
+      list(
+        type = "buttons",
+        direction = "right",
+        x = 1, xanchor = "right",
+        y = 1.12, yanchor = "top",
+        buttons = c(list(play_btn), btns) # buttons per decade
+      )
+    )
+  ) %>%
+  # hide slider and play button
+  animation_slider(hide = TRUE) %>%
+  animation_button(hide = TRUE)
+
+p_btns
+
+# ===== save as interactive HTML  =====
+saveWidget(p_btns, "gap_bar_dec.html", selfcontained = TRUE)
+```
+

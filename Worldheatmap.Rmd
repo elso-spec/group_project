@@ -1,0 +1,156 @@
+---
+title: "Geovanna"
+author: "GZ"
+date: "2025-08-21"
+output: html_document
+---
+
+Packages
+```{r}
+##Libraries
+install.packages("tidytuesdayR")
+install.packages('leaflet')
+
+
+```
+
+Datasets
+```{r}
+##Load the data
+tuesdata <- tidytuesdayR::tt_load('2023-12-05')
+ ##Split data in 3 datasets
+#1
+life_expectancy <- tuesdata$life_expectancy
+#2
+life_expectancy_different_ages <- tuesdata$life_expectancy_different_ages
+#3
+life_expectancy_female_male <- tuesdata$life_expectancy_female_male
+
+```
+
+
+```{r}
+##add the continents
+le_continent <- life_expectancy %>%
+  mutate(continent = countrycode(Entity, origin = "country.name", destination = "continent"))
+
+```
+
+```{r}
+##split in decades
+le_continent <- le_continent %>%
+  mutate(decade = floor(Year / 10) * 10)
+
+by_decade <- split(le_continent, le_continent$decade)
+
+names(by_decade)
+
+```
+        
+
+
+
+```{r}
+# ==== Pachages ====
+install.packages(c("tidyverse", "plotly"))
+install.packages("viridis")
+library(tidyverse)
+library(plotly)
+library(dplyr)
+library(ggplot2)
+library(sf)
+library(rnaturalearth)
+library(viridis)
+
+
+
+# ==== 1) Load the working data ====
+df <- le_continent
+
+
+# ==== 2) Average per decade per continent ====
+df_avg <- df %>%
+  group_by(decade, continent) %>%
+  summarise(avg_lifeexp = mean(LifeExpectancy, na.rm = TRUE), .groups = "drop")
+
+# ==== 3) Make a table with country x decade with the continent average ====
+# (every country gets the continent average)
+countries <- df %>%
+  distinct(Code, Entity, continent) %>%
+  filter(!is.na(Code), nchar(Code) == 3)
+
+decades <- sort(unique(df$decade))
+
+map_df <- tidyr::crossing(countries, decade = decades) %>%
+  left_join(df_avg, by = c("continent", "decade"))
+
+# ==== A) Map for a specific decade ====
+target_decade <- 1980  # <- change as needed
+
+map_static <- map_df %>%
+  filter(decade == target_decade)
+
+p_static <- plot_geo(map_static) %>%
+  add_trace(
+    z = ~avg_lifeexp,
+    color = ~avg_lifeexp,
+    locations = ~Code,      # ISO3 codes
+    text = ~paste0(
+      "<b>", Entity, "</b><br>",
+      "Decade: ", decade, "<br>",
+      "Life expectancy (continent average): ",
+      round(avg_lifeexp, 1)
+    ),
+    hoverinfo = "text"
+  ) %>%
+  colorbar(title = "Life Expectancy") %>%
+  layout(
+    title = paste("World Heatmap — Average per Continent (", target_decade, "s)", sep = ""),
+    geo = list(
+      showframe = FALSE,
+      showcoastlines = FALSE,
+      projection = list(type = "natural earth")
+    )
+  )
+
+p_static  # <- show
+
+# ==== B) Animated map (slider) ====
+p_anim <- plot_ly(
+  map_df,
+  type = "choropleth",
+  locations = ~Code,
+  z = ~avg_lifeexp,
+  frame = ~decade,
+  text = ~paste0(
+    "<b>", Entity, "</b><br>",
+    "Decade: ", decade, "<br>",
+    "Life Expectancy (Continent Average): ",
+    round(avg_lifeexp, 1)
+  ),
+  hoverinfo = "text",
+  colors = "viridis"
+) %>%
+  colorbar(title = "Life Expectancy") %>%
+  layout(
+    title = "Wold Heatmap — Average per Continent (per decade)",
+    geo = list(
+      showframe = FALSE,
+      showcoastlines = FALSE,
+      projection = list(type = "natural earth")
+    )
+  )
+
+# p_anim  # <- for animated version
+
+```
+
+
+```{r}
+##Save as html
+
+htmlwidgets::saveWidget(p_anim, "world_heatmap.html")
+```
+
+
+
