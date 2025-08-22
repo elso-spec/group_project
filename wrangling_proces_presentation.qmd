@@ -122,11 +122,11 @@ life_expectancy_region
 
 ## 3. Visualization
 
-**First, lets take a look at the changes in life expectancy over time:**
-
-We'll start by looking at the continents, and then regions
+**First, lets take a look at the changes in life expectancy over time:** We'll start by looking at the continents, and then regions
 
 ```{r, message = FALSE, warning = FALSE, fig.width = 12, fig.height = 10}
+
+
 life_expectancy_region |> 
   filter(!is.na(Continent)) |> 
   group_by(Continent, Decade) |> 
@@ -148,6 +148,7 @@ life_expectancy_region |>
 ```
 
 ```{r, message=FALSE, warning=FALSE, fig.width = 12, fig.height = 10}
+
 life_expectancy_region |> 
   filter(!is.na(Region)) |> 
   group_by(Region, Decade) |> 
@@ -168,6 +169,7 @@ life_expectancy_region |>
 
 ```{r, message=FALSE, warning=FALSE, fig.width = 12, fig.height = 10}
 # Life expectancy by continent (1950-2020)
+
 life_expectancy_region |> 
   group_by(Continent, Year) |> 
   summarise(mean_le = mean(LifeExpectancy)) |> 
@@ -193,3 +195,386 @@ ggplot(life_expectancy_region, aes(x = Year, y = Entity, fill = LifeExpectancy))
   theme(axis.text.y = element_text(size = 8)) 
   
 ```
+
+### The distribution of life expectancies within regions with comparison of the 1960s and the 2010s.
+
+## calculate average for the decade 1960 og 2010
+
+First I calculate the average over decade by country
+
+```{r}
+life_expectancy_avg <- life_expectancy_region %>%
+  filter(Decade %in% c(1960, 2010)) %>%
+  group_by(Entity, Region, Decade) %>%
+  summarise(LifeExpectancy = mean(LifeExpectancy), .groups = "drop")
+
+```
+
+Then i make a violin plot
+
+```{r}
+# Plot half violins
+ggplot(life_expectancy_avg, aes(x = Region, y = LifeExpectancy, fill = factor(Decade))) +
+  # Half violins
+  geom_half_violin(data = subset(life_expectancy_avg, Decade == 1960), side = "l", alpha = 0.6) +
+  geom_half_violin(data = subset(life_expectancy_avg, Decade == 2010), side = "r", alpha = 0.6) +
+  
+  # Punkter for hvert land
+  #geom_point(aes(group = Entity), position = position_jitter(width = 0.1), size = 2, alpha = 0.7, color = "black") +
+  #points could be added, but also overflows the visuals of the plot
+  # Farver
+  scale_fill_viridis_d(name = "Decade") + #inserting colorscheme
+  
+  # Tema og labels
+  theme_minimal(base_size = 14) +
+  labs(
+    title = "Life Expectancy per Region: 1960 vs 2010", #lab titles
+    x = "Region",
+    y = "Life Expectancy"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) #axis text placement and angle
+```
+
+### The distribution over the world across decades 
+
+Firstly we join the data with population data and create a new data set
+
+```{r}
+dplyr::glimpse(countrypops)
+
+# 1. Join life expectancy with countrypops
+life_expectancy_pop <- life_expectancy_region %>%
+  left_join(
+    countrypops %>%
+      rename(Code = country_code_3, Year = year, Population = population),
+    by = c("Code", "Year")
+  )
+str(life_expectancy_pop)
+```
+
+Then I check for NAs
+
+```{r}
+na_list <- life_expectancy_pop %>%
+  filter(is.na(Population)) %>%
+  distinct(Code, Entity) %>%
+  arrange(Code)
+
+na_list
+sum(is.na(life_expectancy_pop$Population))
+```
+
+Then I check the range of the Year column
+
+```{r}
+range(life_expectancy_region$Year)
+range(countrypops$year)
+```
+
+I then filter the columns to match and check for NAs again
+
+```{r}
+life_expectancy_pop <- life_expectancy_region %>%
+  filter(Year >= 1962) %>%
+  left_join(
+    countrypops %>%
+      rename(Code = country_code_3, Year = year, Population = population),
+    by = c("Code", "Year")
+  )
+
+sum(is.na(life_expectancy_pop$Population))
+
+# Find alle Codes hvor Population er NA
+na_list1 <- life_expectancy_pop %>%
+  filter(is.na(Population)) %>%
+  distinct(Code, Entity) %>%
+  arrange(Code)
+
+na_list1
+```
+
+I then remove the NAs
+
+```{r}
+life_expectancy_pop <- life_expectancy_pop %>%
+  filter(!is.na(Population)) 
+
+sum(is.na(life_expectancy_pop$Population))
+```
+
+Then I insert a new column with decade as a factor, since ggridges works with this.
+
+```{r}
+life_expectancy_pop <- life_expectancy_pop %>%
+  mutate(DecadeF = factor(Decade))             # Decade as factor
+```
+
+I now make a ridgeplot
+
+```{r}
+# 5. Start med grundplot: ridge plot
+p <- ggplot(life_expectancy_pop, aes(
+  x = LifeExpectancy,
+  y = DecadeF,
+  fill = DecadeF
+)) +
+  ggridges::geom_density_ridges(scale = 2, alpha = 0.6, color = "white") +
+  scale_fill_viridis_d(option = "D") +
+  scale_x_continuous(name = "Life Expectancy") +
+  scale_y_discrete(name = "Decade", limits = rev) +   # <--- vend rækkefølgen
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "right") +
+  labs(title = "Life Expectancy by Decade")
+p
+```
+
+Now i decide to add a point with geom_point for the average by decade
+
+```{r}
+# Calculate non-weighted mean per decade
+mean_per_decade <- life_expectancy_pop %>%
+  group_by(DecadeF) %>%
+  summarise(mean_LE = mean(LifeExpectancy))
+            
+p1<- p + geom_point(
+  data = mean_per_decade,
+  aes(x = mean_LE, y = DecadeF,color="Unweighted mean"))
+p1
+            
+```
+
+And a median
+
+```{r}
+# Calculate median per decade
+median_per_decade <- life_expectancy_pop %>%
+  group_by(DecadeF) %>%
+  summarise(median_LE = median(LifeExpectancy, na.rm = TRUE))
+
+p2<-p1+geom_line(
+    data = median_per_decade,
+    aes(x = median_LE, y = DecadeF, group = 1, color="Unweighted median"),
+    size = 1,
+    linetype = "dashed"
+  )
+p2
+```
+
+And the same where it is weighted by population
+
+```{r}
+weighted_means <- life_expectancy_pop %>%
+  group_by(DecadeF) %>%
+  summarise(
+    wmean = sum(LifeExpectancy * Population) / sum(Population)
+  )
+
+library(matrixStats)
+
+weighted_medians <- life_expectancy_pop %>%
+  group_by(DecadeF) %>%
+  summarise(
+    median_w = matrixStats::weightedMedian(LifeExpectancy, Population, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+weighted_medians
+ p3 <- p2 +
+  geom_point(
+    data = weighted_means,
+    aes(x = wmean, y = DecadeF, color="Weighted mean")) 
+p3
+
+p4 <- p3 +
+  geom_line(
+    data = weighted_medians,
+    aes(x = median_w, y=DecadeF, group=1,color="Weighted median"),
+    linetype = "dashed",
+    size = 1) 
+
+
+p4
+```
+
+And we add a legend
+
+```{r}
+p5<-p4+
+  scale_color_manual(
+    name = "Statistics",
+    values = c(
+      "Unweighted mean" = "blue",
+      "Unweighted median" = "blue",
+      "Weighted mean"   = "red",
+      "Weighted median" = "red"),
+    guide = guide_legend(override.aes = list(shape = 16, size = 3)))
+p5
+
+```
+
+**Then, lets see the information per country**
+
+First, generate a world heatmap with the average Life Expectancy per country per decade, starting from 1920
+
+```{r}
+##Add the continents to the data
+le_continent <- life_expectancy %>%
+  mutate(continent = countrycode(Entity, origin = "country.name", destination = "continent"))
+
+
+##Split in decades
+le_continent <- le_continent %>%
+  mutate(decade = floor(Year / 10) * 10)
+
+by_decade <- split(le_continent, le_continent$decade)
+
+names(by_decade)
+
+# Make a working data frame
+df <- le_continent_subset %>% as_tibble()
+
+# Country-by-decade average (from 1920s onward)
+df_country_dec <- df %>%
+  mutate(
+    decade = (Year %/% 10) * 10,
+    Code   = trimws(Code)
+  ) %>%
+  # keep real countries (valid ISO3 codes) and decades >= 1920
+  filter(!is.na(Code), Code != "", nchar(Code) == 3, grepl("^[A-Za-z]{3}$", Code),
+         decade >= 1920) %>%
+  group_by(Code, Entity, decade) %>%
+  summarise(avg_lifeexp = mean(LifeExpectancy, na.rm = TRUE), .groups = "drop")
+
+# Consistent colors across decades
+zmin <- floor(min(df_country_dec$avg_lifeexp, na.rm = TRUE))
+zmax <- ceiling(max(df_country_dec$avg_lifeexp, na.rm = TRUE))
+
+# ANIMATED MAP (all decades from 1920s)
+
+p_anim <- plot_ly(
+  df_country_dec,
+  type         = "choropleth",
+  locations    = ~Code, locationmode = "ISO-3",
+  z            = ~avg_lifeexp,
+  frame        = ~decade,
+  text         = ~paste0(
+    "<b>", Entity, "</b><br>",
+    "Decade: ", decade, "<br>",
+    "Life expectancy: ", round(avg_lifeexp, 1)
+  ),
+  hoverinfo    = "text",
+  colorscale   = "Viridis",
+  zmin         = zmin, zmax = zmax
+) %>%
+  layout(
+    title = "Average life expectancy by country — animated by decade (from 1920s)",
+    geo = list(
+      showframe = FALSE,
+      showcoastlines = FALSE,
+      showcountries = TRUE,
+      projection = list(type = "natural earth")
+    )
+  )
+
+# Save animated map into a HTML file
+saveWidget(p_anim, "worldheatmap.html", selfcontained = TRUE)
+
+
+```
+
+The world heatmap represents the global tendencies, continent differences remain similar decade after decade.
+
+Now, lets see the information of the differences between females and males per country per decade.
+
+```{r}
+##Load the data and make your working dataframe
+df <- life_expectancy_female_male %>% as_tibble()
+
+# Gap (Females − Males)
+if ("LifeExpectancyDiffFM" %in% names(df)) {
+  df <- df %>% mutate(Gap = LifeExpectancyDiffFM)
+} else if (all(c("LE_Female", "LE_Male") %in% names(df))) {
+  df <- df %>% mutate(Gap = LE_Female - LE_Male)
+} else {
+  stop("cant find 'LifeExpectancyDiffFM' or 'LE_Female/LE_Male' in the df.")
+}
+
+# Clean codes and add decades
+df <- df %>%
+  mutate(
+    Code   = trimws(Code),
+    decade = (Year %/% 10) * 10
+  ) %>%
+  filter(
+    !is.na(Code), Code != "",
+    nchar(Code) == 3, grepl("^[A-Za-z]{3}$", Code),
+    decade >= 1950
+  )
+
+# Mean per country per decade, exclude NA
+df_dec <- df %>%
+  group_by(Entity, Code, decade) %>%
+  summarise(Gap = mean(Gap, na.rm = TRUE), .groups = "drop") %>%
+  filter(!is.na(Gap)) %>%
+  mutate(
+    Sign = ifelse(Gap >= 0, "Females > Males", "Males > Females"),
+    decade_str = as.character(decade) # frames as texto
+  )
+
+pal2 <- c("#ef476f", "#06d6a0")
+
+# Simetric
+lim <- max(abs(range(df_dec$Gap, na.rm = TRUE)))
+xrange <- c(-lim, lim)
+
+# Buttons per decade
+decades <- sort(unique(df_dec$decade_str))
+btns <- lapply(decades, function(d) {
+  list(
+    label = paste0(d, "s"),
+    method = "animate",
+    args = list(
+      list(d),
+      list(mode = "immediate",
+           frame = list(duration = 0, redraw = TRUE),
+           transition = list(duration = 0))
+    )
+  )
+})
+
+p_btns <- plot_ly(
+  df_dec,
+  x = ~Gap, y = ~Entity,
+  frame = ~decade_str,
+  type = "bar", orientation = "h",
+  color = ~Sign, colors = pal2,
+  hovertemplate = paste(
+    "<b>%{y}</b><br>",
+    "Decade: %{frame}<br>",
+    "Gap (Females − Males): %{x:.2f} years<extra></extra>"
+  )
+) %>%
+  layout(
+    title = "Life Expectancy gap per Country — Decades (since 1950)",
+    xaxis = list(title = "Years (positive = Females > Males)"),
+    yaxis = list(title = ""),
+    barmode = "relative",
+    height = 800,
+    updatemenus = list(
+      list(
+        type = "buttons",
+        direction = "right",
+        x = 1, xanchor = "right",
+        y = 1.12, yanchor = "top",
+        buttons = btns          # just decades
+      )
+    )
+  ) %>%
+  animation_slider(hide = TRUE) %>%   # hide slider
+  animation_button(hide = TRUE)       # hide Play 
+
+# Save as interactive HTML
+saveWidget(p_btns, "gap_bar_dec.html", selfcontained = TRUE)
+```
+
+The differential plot shows the gender gap and how it remains as females having a bigger life expectancy than males but we can observe some cases in the earlier decades where the males have bigger life expectancy for a few countries.
