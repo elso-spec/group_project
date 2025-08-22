@@ -74,7 +74,7 @@ head(life_expectancy_female_male)
 
 First, we limit the follow-up time from 1950 to 2020. For the *life_expectancy* data set, we also add the variable *Decade*
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 life_expectancy <- life_expectancy |>
   filter(Year >= 1950 & Year <= 2020)
 
@@ -141,7 +141,7 @@ life_expectancy_region |>
     title = "Mean life expectancies from 1950 to 2020, by continent"
   )
 ```
-```{r}
+```{r, message=FALSE, warning=FALSE}
 life_expectancy_region |> 
   filter(!is.na(Region)) |> 
   group_by(Region, Decade) |> 
@@ -157,7 +157,7 @@ life_expectancy_region |>
     title = "Mean life expectancies from 1950 to 2020, by region"
   )
 ```
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # Life expectancy by region (1950-2020)
 life_expectancy_region |> 
   group_by(Region, Year) |> 
@@ -171,15 +171,17 @@ life_expectancy_region |>
   theme(axis.text.y = element_text(size = 6))
 ```
 
-```{r}
+```{r, fig.height=20, fig.width=12, message=FALSE, warning=FALSE}
 # Life expectancy by country (1950-2020)
-ggplot(life_expectancy_countries, aes(x = Year, y = Entity, fill = LifeExpectancy)) +
-  geom_tile() +
+ggplot(life_expectancy_region, aes(x = Year, y = Entity, fill = LifeExpectancy)) +
+  geom_tile() + 
+  facet_wrap( ~ Continent, scales = "free_y") +
   scale_fill_viridis_c(option = "plasma", name = "Life Expectancy") +
   labs(title = "Life Expectancy by Country (1960–2020)",
        x = "Year", y = "Country") +
   theme_minimal() +
-  theme(axis.text.y = element_text(size = 6))
+  theme(axis.text.y = element_text(size = 6)) 
+  
 ```
 
 
