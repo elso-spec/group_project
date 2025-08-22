@@ -1,6 +1,6 @@
 ---
-title: "Presentation"
-author: "Elisabeth Solmunde"
+title: "Group Project, Advanced R"
+author: "Laura Ruth Bisgaard, Geovanna Zarate & Elisabeth Solmunde"
 format: html
 editor: visual
 ---
@@ -427,7 +427,7 @@ p5
 
 First, generate a world heatmap with the average Life Expectancy per country per decade, starting from 1920
 
-```{r}
+```{r, fig.width = 12, fig.height = 10}
 ##Add the continents to the data
 le_continent <- life_expectancy %>%
   mutate(continent = countrycode(Entity, origin = "country.name", destination = "continent"))
@@ -496,7 +496,7 @@ The world heatmap represents the global tendencies, continent differences remain
 
 Now, lets see the information of the differences between females and males per country per decade.
 
-```{r}
+```{r, fig.width = 12, fig.height = 10}
 ##Load the data and make your working dataframe
 df <- life_expectancy_female_male %>% as_tibble()
 
